@@ -26,6 +26,23 @@ db = mysql.connector.connect(
 
 cursor = db.cursor()
 
+create_table_query = """
+CREATE TABLE IF NOT EXISTS usuarios (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    usuario VARCHAR(100) NOT NULL,
+    mail VARCHAR(100) NOT NULL,
+    password VARCHAR(100) NOT NULL
+);
+"""
+
+# Execute the query
+cursor.execute(create_table_query)
+
+# Commit changes and close the connection
+db.commit()
+
+
+
 @app.route('/usuarios', methods=['POST'])
 def add_usuario():
     data = request.json

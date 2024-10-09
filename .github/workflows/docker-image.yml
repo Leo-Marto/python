@@ -28,6 +28,7 @@ jobs:
         docker build -t ${{ secrets.DOCKER_USERNAME }}/python:latest .
         docker push ${{ secrets.DOCKER_USERNAME }}/python:latest
   deploy:
+    needs: build
     runs-on: Linux
     steps:
       - run: |

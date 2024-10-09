@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
+import paho.mqtt.client as mqtt
 import mysql.connector
 import os
 import time
@@ -10,6 +11,36 @@ hostenv = os.getenv('HOST_DB')
 userenv = os.getenv('USER_DB')
 passwordenv = os.getenv('PASS_DB')
 databaseenv = os.getenv('DATABASE_DB')
+
+
+# MQTT Setup
+mqtt_broker = "icuadrado.net"
+mqtt_port = 1883
+mqtt_username = "UsuarioSOS"
+mqtt_password = "SOS2020"
+mqtt_topic = "test/topic"
+
+
+# Create a new MQTT client instance
+mqtt_client = mqtt.Client()
+mqtt_client.username_pw_set(mqtt_username, mqtt_password)
+mqtt_client.connect(mqtt_broker, mqtt_port,)
+mqtt_client.publish(mqtt_topic, "app iniciada")
+
+
+
+
+# Callback when the MQTT client receives a message
+def on_message(client, userdata, message):
+    print(f"Received message: {message.payload.decode()} on topic {message.topic}")
+
+def mqtt_subscribe():
+    mqtt_client.on_message = on_message
+    mqtt_client.username_pw_set(mqtt_username, mqtt_password)
+    mqtt_client.connect(mqtt_broker, mqtt_port,)
+    mqtt_client.subscribe(mqtt_topic)
+    mqtt_client.loop_forever()  # Run the MQTT client in a blocking loop
+
 
 
 def connect_to_mysql():
@@ -76,11 +107,26 @@ def add_usuario():
     mail = data['mail']
     password = data['password']
 
-    query = "INSERT INTO usuarios (usuario, mail, password) VALUES (%s, %s, %s)"
-    cursor.execute(query, (usuario, mail, password))
-    db.commit()
+    query = 'SELECT id FROM usuarios WHERE mail=%s'
+    cursor.execute(query,(mail,))
+    usuarios = cursor.fetchall()
 
-    return jsonify({"message": "Usuario agregado exitosamente"}), 201
+    if usuarios:
+        print("Ya existe")
+        mensaje="No se agrego"
+        status = 304
+        mqtt_client.publish(mqtt_topic, mensaje)
+
+    else:
+        query = "INSERT INTO usuarios (usuario, mail, password) VALUES (%s, %s, %s)"
+        cursor.execute(query, (usuario, mail, password))
+        db.commit()
+        mensaje="Usuario agregado"
+        status = 201
+        mqtt_client.publish(mqtt_topic, mensaje)
+    
+
+    return jsonify({"message": mensaje}), status
 
 
 # Ruta para obtener todos los usuarios (READ)
@@ -117,10 +163,12 @@ def update_usuario(id):
 
 
 # Ruta para eliminar un usuario (DELETE)
-@app.route('/usuarios/<int:id>', methods=['DELETE'])
-def delete_usuario(id):
-    query = "DELETE FROM usuarios WHERE id=%s"
-    cursor.execute(query, (id,))
+@app.route('/usuarios/<string:mail>', methods=['DELETE'])
+def delete_usuario(mail):
+    #data = request.json
+    print(mail)
+    query = "DELETE FROM usuarios WHERE mail=%s"
+    cursor.execute(query, (mail,))
     db.commit()
 
     return jsonify({"message": "Usuario eliminado exitosamente"}), 200
@@ -128,3 +176,4 @@ def delete_usuario(id):
 
 if __name__ == '__main__':
     app.run(debug=True)
+    #app.run(debug=True, port=8082)

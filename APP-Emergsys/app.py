@@ -1,102 +1,17 @@
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
-import paho.mqtt.client as mqtt
-import mysql.connector
-import os
-import time
+import database as db
+import bcrypt
+import mqtt as mqtt
 
 load_dotenv()
-
-hostenv = os.getenv('HOST_DB')
-userenv = os.getenv('USER_DB')
-passwordenv = os.getenv('PASS_DB')
-databaseenv = os.getenv('DATABASE_DB')
-
-
-# MQTT Setup
-mqtt_broker = "icuadrado.net"
-mqtt_port = 1883
-mqtt_username = "UsuarioSOS"
-mqtt_password = "SOS2020"
-mqtt_topic = "test/topic"
-
-
-# Create a new MQTT client instance
-mqtt_client = mqtt.Client()
-mqtt_client.username_pw_set(mqtt_username, mqtt_password)
-mqtt_client.connect(mqtt_broker, mqtt_port,)
-mqtt_client.publish(mqtt_topic, "app iniciada")
-
-
-
-
-# Callback when the MQTT client receives a message
-def on_message(client, userdata, message):
-    print(f"Received message: {message.payload.decode()} on topic {message.topic}")
-
-def mqtt_subscribe():
-    mqtt_client.on_message = on_message
-    mqtt_client.username_pw_set(mqtt_username, mqtt_password)
-    mqtt_client.connect(mqtt_broker, mqtt_port,)
-    mqtt_client.subscribe(mqtt_topic)
-    mqtt_client.loop_forever()  # Run the MQTT client in a blocking loop
-
-
-
-def connect_to_mysql():
-    try:
-        # Attempt to connect to the database
-        db = mysql.connector.connect(
-            host=hostenv,  # Cambiar según tu configuración
-            user=userenv,       # Cambiar según tu usuario de MySQL
-            password=passwordenv,       # Cambiar según tu password de MySQL
-            database=databaseenv  # Base de datos que creaste
-        )
-        print("Connection successful!")
-        return db
-    except mysql.connector.Error as err:
-        print(f"Error: {err}")
-        return None
-
-# Retry connecting up to 5 times with a delay of 5 seconds
-retries = 5
-for attempt in range(retries):
-    connection = connect_to_mysql()
-    if connection:
-        break
-    print(f"Retrying in 5 seconds... ({attempt + 1}/{retries})")
-    time.sleep(5)
-
-if connection is None:
-    print("Failed to connect to the MySQL database after multiple attempts.")
 
 
 app = Flask(__name__)
 
-db = mysql.connector.connect(
-    host=hostenv,  # Cambiar según tu configuración
-    user=userenv,       # Cambiar según tu usuario de MySQL
-    password=passwordenv,       # Cambiar según tu password de MySQL
-    database=databaseenv  # Base de datos que creaste
-)
 
 
-cursor = db.cursor()
-
-create_table_query = """
-CREATE TABLE IF NOT EXISTS usuarios (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    usuario VARCHAR(100) NOT NULL,
-    mail VARCHAR(100) NOT NULL,
-    password VARCHAR(100) NOT NULL
-);
-"""
-
-# Execute the query
-cursor.execute(create_table_query)
-
-# Commit changes and close the connection
-db.commit()
+cursor = db.database.cursor()
 
 
 
@@ -105,28 +20,64 @@ def add_usuario():
     data = request.json
     usuario = data['usuario']
     mail = data['mail']
-    password = data['password']
-
-    query = 'SELECT id FROM usuarios WHERE mail=%s'
+    passutf = data['password'].encode('utf-8')
+    password = bcrypt.hashpw(passutf, bcrypt.gensalt())  # Hashing the password
+    query = 'SELECT * FROM usuarios WHERE mail=%s'
     cursor.execute(query,(mail,))
-    usuarios = cursor.fetchall()
+    listausuarios = cursor.fetchall()
 
-    if usuarios:
-        print("Ya existe")
-        mensaje="No se agrego"
+
+    if listausuarios:
+        usuarios=listausuarios[0]
+        print(usuarios)
+        mensaje= str(usuarios)
         status = 304
-        mqtt_client.publish(mqtt_topic, mensaje)
+        mqtt.mqtt_client.publish("test/topic", mensaje)
 
     else:
         query = "INSERT INTO usuarios (usuario, mail, password) VALUES (%s, %s, %s)"
         cursor.execute(query, (usuario, mail, password))
-        db.commit()
-        mensaje="Usuario agregado"
+        db.database.commit()
+        mensa= {
+            "usuario": usuario,
+            "mail": mail,
+            "password": password
+        }
+        mensaje = str(mensa)
         status = 201
-        mqtt_client.publish(mqtt_topic, mensaje)
+        mqtt.mqtt_client.publish("test/topic", mensaje)
     
 
-    return jsonify({"message": mensaje}), status
+    return jsonify(mensaje), status
+
+#Validar usuario
+
+@app.route('/validar', methods=['GET'])
+def val_usuario():
+    data = request.json
+    print(data)
+    mail = data.get('mail')
+    passres = data.get('password')
+    print(passres)
+    passutf = passres.encode('utf-8')
+    print(passutf)
+
+ 
+    query = "SELECT password FROM usuarios WHERE mail=%s"
+    cursor.execute(query, (mail,))
+    validar=cursor.fetchall()
+ 
+    if validar:
+        valpass=validar[0]
+        print(valpass[0])
+        if bcrypt.checkpw(passutf, valpass[0].encode('utf-8')):
+            mensaje="contraseña valida"
+    else:
+        mensaje="Usuario no valido"           
+    
+    return jsonify({"message": mensaje }), 200
+
+
 
 
 # Ruta para obtener todos los usuarios (READ)
@@ -153,11 +104,11 @@ def update_usuario(id):
     print(data)
     usuario = data.get('usuario')
     mail = data.get('mail')
-    password = data.get('password')
-
+    passutf = data.get('password').encode('utf-8')
+    password = bcrypt.hashpw(passutf, bcrypt.gensalt())  # Hashing the password
     query = "UPDATE usuarios SET usuario=%s, mail=%s, password=%s WHERE id=%s"
     cursor.execute(query, (usuario, mail, password, id))
-    db.commit()
+    db.database.commit()
 
     return jsonify({"message": "Usuario actualizado exitosamente"}), 200
 
@@ -169,11 +120,11 @@ def delete_usuario(mail):
     print(mail)
     query = "DELETE FROM usuarios WHERE mail=%s"
     cursor.execute(query, (mail,))
-    db.commit()
+    db.database.commit()
 
     return jsonify({"message": "Usuario eliminado exitosamente"}), 200
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
-    #app.run(debug=True, port=8082)
+    #app.run(debug=True)
+    app.run(debug=True, port=8082)

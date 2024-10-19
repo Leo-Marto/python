@@ -1,4 +1,5 @@
 import mysql.connector
+from mysql.connector import Error
 import os
 import time
 from dotenv import load_dotenv
@@ -23,11 +24,13 @@ database = mysql.connector.connect(
 cursor = database.cursor()
 
 create_table_query = """
-CREATE TABLE IF NOT EXISTS usuarios (
+CREATE TABLE IF NOT EXISTS instalador (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    usuario VARCHAR(100) NOT NULL,
-    mail VARCHAR(100) NOT NULL,
-    password VARCHAR(100) NOT NULL
+    nombre VARCHAR(100) NOT NULL,
+    mail VARCHAR(100) UNIQUE,
+    password VARCHAR(100) NOT NULL,
+    activo BOOLEAN,
+    fecha_alta DATE NOT NULL
 );
 """
 
@@ -41,9 +44,71 @@ database.commit()
 create_table_query = """
 CREATE TABLE IF NOT EXISTS barrios (
     id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(100) UNIQUE,
+    mailadmin VARCHAR(100) NOT NULL,
+    mailinst VARCHAR(100) NOT NULL,
+    fecha_alta DATE NOT NULL
+);
+"""
+
+# Execute the query
+cursor.execute(create_table_query)
+
+# Commit changes and close the connection
+database.commit()
+
+
+
+
+create_table_query = """
+CREATE TABLE IF NOT EXISTS usuarios (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    mail VARCHAR(100) UNIQUE,
+    password VARCHAR(100) NOT NULL,
+    fecha_alta DATE NOT NULL,
+    barrio1 VARCHAR(100),
+    barrio2 VARCHAR(100),
+    barrio3 VARCHAR(100)
+    
+);
+"""
+
+# Execute the query
+cursor.execute(create_table_query)
+
+# Commit changes and close the connection
+database.commit()
+
+
+
+
+
+create_table_query = """
+CREATE TABLE IF NOT EXISTS placas (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    mac VARCHAR(100) UNIQUE,
+    barrio VARCHAR(100),
+    instalador VARCHAR(100),
+    fecha_alta DATE NOT NULL
+);
+"""
+
+# Execute the query
+cursor.execute(create_table_query)
+
+# Commit changes and close the connection
+database.commit()
+
+
+
+create_table_query = """
+CREATE TABLE IF NOT EXISTS alertas_barrios (
+    id INT AUTO_INCREMENT PRIMARY KEY,
     usuario VARCHAR(100) NOT NULL,
-    mail VARCHAR(100) NOT NULL,
-    password VARCHAR(100) NOT NULL
+    barrio VARCHAR(100) NOT NULL,
+    tipo VARCHAR(100) NOT NULL,
+    fecha DATETIME NOT NULL
 );
 """
 
